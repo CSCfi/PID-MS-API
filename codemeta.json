@@ -7,6 +7,7 @@
     "dateModified": "2023-05-24",
     "name": "PID-MS-API",
     "version": "1.1.",
+    "identifier": "swh:1:dir:a85b94f62904059ac4a6cb057df0ab0dfb38ca6a;",
     "description": "Persistant IDentifier MicroService API can create URN, Handle or DOI. It's Quarkus program targeted to run as service.",
     "applicationCategory": "PID",
     "developmentStatus": "active",
