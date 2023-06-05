@@ -1,8 +1,8 @@
 package fi.csc.pid.api;
 
 import fi.csc.pid.api.db.FactPiDInterlinkage;
-import fi.csc.pid.api.doi.DOI;
 import fi.csc.pid.api.entity.*;
+import fi.csc.pid.api.handle.Handle;
 import fi.csc.pid.api.model.Sisältö;
 import fi.csc.pid.api.model.Syntax;
 import fi.csc.pid.api.service.*;
@@ -15,16 +15,11 @@ import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.MediaType;
-//import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 
 import java.sql.Timestamp;
-import java.text.DecimalFormat;
-import java.text.FieldPosition;
-import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.util.List;
-//import java.util.UUID;
 
 import org.jboss.logging.Logger;
 
@@ -32,6 +27,8 @@ import static fi.csc.pid.api.Util.ACCESSDENIED;
 import static fi.csc.pid.api.Util.INVALID;
 import static fi.csc.pid.api.Util.TODO;
 import static fi.csc.pid.api.Util.URLMISSING;
+import static fi.csc.pid.api.Util.URLPUUTTUU;
+import static fi.csc.pid.api.Util.tarkistaURL;
 
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -183,15 +180,9 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
             if (null == pid) {
                 return Response.notModified("PID do not exist!").build();
             } else {
-                if (null == URL) {
-                    LOG.warn("URL puuttuu!");
-                    return URLMISSING;
-                }
-                JSONObject jo = new JSONObject(URL);
-                String url = jo.getString("URL");
-                if (null == url) {
-                    LOG.warn("Syötteen pitäisi olla JSON olio {URL: arvo}!");
-                    return URLMISSING;
+                String url = tarkistaURL(URL);
+                if (url.equals(URLPUUTTUU)) {
+                     return URLMISSING;
                 }
                 int urlid = fpis.getById(id).getUrlId();
                 Dim_url du = dus.getById(urlid);
@@ -344,7 +335,7 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
      * @param internal_id long dim_PIDinternal_id
      * @param url String URL
      */
-    void historiantallennus(int id, long internal_id, String url) {
+    public static void historiantallennus(int id, long internal_id, String url) {
         Fact_touched ft = new Fact_touched();
         ft.dim_organizationid =ApplicationLifecycle.serviceorganization.get(id);
         ft.dim_PIDinternal_id =internal_id;

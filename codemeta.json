@@ -1,0 +1,45 @@
+{
+    "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
+    "@type": "SoftwareSourceCode",
+    "codeRepository": "https://github.com/CSCfi/PID-MS-API.git",
+    "dateCreated": "2022-05-24",
+    "datePublished": "2023-05-24",
+    "dateModified": "2023-05-24",
+    "name": "PID-MS-API",
+    "version": "1.1.",
+    "description": "Persistant IDentifier MicroService API can create URN, Handle or DOI. It's Quarkus program targeted to run as service.",
+    "applicationCategory": "PID",
+    "developmentStatus": "active",
+    "funder": {
+        "@type": "Organization",
+        "name": "Ministry of Education and Culture, Finland"
+    },
+    "keywords": [
+        "URN",
+        "Handle",
+        "DOI",
+        "PID"
+    ],
+    "programmingLanguage": [
+        "Java"
+    ],
+    "runtimePlatform": [
+        "JVM",
+        "graalVM"
+    ],
+    "operatingSystem": [
+        "Any"
+    ],
+    "author": [
+        {
+            "@type": "Person",
+            "@id": "https://orcid.org/0000-0003-3111-1515",
+            "givenName": "Pekka",
+            "familyName": "Järveläinen",
+            "affiliation": {
+                "@type": "Organization",
+                "name": "CSC"
+            }
+        }
+    ]
+}

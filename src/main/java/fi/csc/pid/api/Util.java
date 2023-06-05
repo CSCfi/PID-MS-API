@@ -4,6 +4,7 @@ import fi.csc.pid.api.entity.Dim_PID;
 import fi.csc.pid.api.model.Sisältö;
 import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
+import org.json.JSONObject;
 
 import java.sql.Connection;
 import java.text.DecimalFormat;
@@ -18,6 +19,7 @@ public class Util {
     private final static String KEYERROR = "API key was INVALID";
     public final static Response ACCESSDENIED = Response.status(AD, KEYERROR).build();
     public final static Response TODO = Response.status(501, "Not yet implemented").build();
+    public final static String URLPUUTTUU = "URLPUUTTUU";
     public final static Response URLMISSING = Response.status(400, "URL must be JSON olio {\"URL\": \"arvo\"}!").build();
     private static final Logger LOG = Logger.getLogger(Util.class);
 
@@ -41,6 +43,19 @@ public class Util {
         }
     }
 
+    public static String tarkistaURL(String URL) {
+        if (null == URL) {
+            LOG.warn("URL puuttuu!");
+            return URLPUUTTUU;
+        }
+        JSONObject jo = new JSONObject(URL);
+        String url = jo.getString("URL");
+        if (null == url) {
+            LOG.warn("Syötteen pitäisi olla JSON olio {URL: arvo}!");
+            return URLPUUTTUU;
+        }
+        return url;
+    }
     /**
      * Luo pysyvän tunnisteen tietokantaan
      *

@@ -112,7 +112,7 @@ public class DOI {
         return true;
     }
 
-    private URI uriFromString(String address) {
+    public static  URI uriFromString(String address) {
         URI uri = null;
        try {
             uri = new URI(address);
