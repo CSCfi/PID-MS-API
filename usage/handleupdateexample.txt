@@ -1,0 +1,11 @@
+Ongelma: URL sisältää kirjoitus virheen (kuvat sanan jälkeen puuttuu /)
+Handle Values for: 11113/lb-202304000451768
+Index	Type	Timestamp	Data
+1	URL	2023-04-18 11:33:37Z	https://pj.dy.fi/pj/kuvatvuokatti/panorama/vuokatti22panorama.html/
+
+Korjaus: Tuotetaan json tiedosto, jossa on korjattu URL
+cat URL.json
+{ "URL": "https://pj.dy.fi/pj/kuvat/vuokatti/panorama/vuokatti22panorama.html"}
+Koska tuo on kielipankin PID, täytyy korjauksessa käyttää kielipanki API-avainta
+curl -i -X PUT  -d @URL.json -H 'Content-Type: application/json' -H 'apikey: oistettu' http://localhost:8080/v1/pid/handle/11113/lb-202304000451768
+Huomaa PUT metodi HTTP-kutsussa
