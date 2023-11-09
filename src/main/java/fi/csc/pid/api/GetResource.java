@@ -53,7 +53,7 @@ public class GetResource {
      * @param URL String resurssin url
      * @return String JSON pid, pid_type
      */
-    @JacksonFeatures(serializationDisable = {SerializationFeature.FAIL_ON_EMPTY_BEANS})
+    /*@JacksonFeatures(serializationDisable = {SerializationFeature.FAIL_ON_EMPTY_BEANS})*/
     @Transactional
     @GET
     @Produces(MediaType.APPLICATION_JSON)
@@ -80,6 +80,7 @@ public class GetResource {
             return Response.status(500, "URL exist but no PID!").build();
         }
         Dim_pid_scheme dps = dpss.getById(dp.dim_pid_scheme_id);
+        //LOG.info("Kyselyn pitäisi palauttaa: " + dp.identifier_string);
         GetPidTuloste gpt = new GetPidTuloste(dp.identifier_string, dps.pid_type);
         return Response.ok(gpt ).build();
     }

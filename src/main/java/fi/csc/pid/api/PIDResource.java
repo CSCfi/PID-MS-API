@@ -24,6 +24,7 @@ import java.util.List;
 import org.jboss.logging.Logger;
 
 import static fi.csc.pid.api.Util.ACCESSDENIED;
+import static fi.csc.pid.api.Util.AD;
 import static fi.csc.pid.api.Util.INVALID;
 import static fi.csc.pid.api.Util.TODO;
 import static fi.csc.pid.api.Util.URLMISSING;
@@ -62,7 +63,8 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
     String EPICKEY;
 
     private static final Logger LOG = Logger.getLogger(PIDResource.class);
-    private final static String REGEXPPARSERI = "YYYYMM";//fake
+    private final static String YYYYMM = "YYYYMM";
+    private final static String UUID ="UUID";
     private final static String ALAVIIVA = "_";
     public final static String NOCONNECTION = "Can't get connection from database";
     private final static String HANDLEFAULURE = "Handlen luonti epäonnistui";
@@ -151,7 +153,7 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
             if (null == dp) return Response.status(404, "PID don't exist.").build();
             else {
                 List<Fact_touched> lft = fts.getById(dp.internal_id);
-                if ((null != lft) && (lft.size() > 0)) {
+                if ((null != lft) && (!lft.isEmpty())) {
                     return Response.ok(lft).build();
                 }
             }
@@ -184,12 +186,16 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
                 if (url.equals(URLPUUTTUU)) {
                      return URLMISSING;
                 }
-                int urlid = fpis.getById(id).getUrlId();
-                Dim_url du = dus.getById(urlid);
-                historiantallennus(sid, id, du.url);
-                du.url = url;
-                du.persistAndFlush();
-                return Response.ok(du).build();
+                if (pid.dim_serviceid == sid) {
+                    int urlid = fpis.getById(id).getUrlId();
+                    Dim_url du = dus.getById(urlid);
+                    historiantallennus(sid, id, du.url);
+                    du.url = url;
+                    du.persistAndFlush();
+                    return Response.ok(du).build();
+                } else {
+                    return Response.status(AD, "You are NOT URL owner!").build();
+                }
             }
 
         }
@@ -215,6 +221,7 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
         long duc = dus.countByURL(s.getUrl());
         if (0 < duc)/*null != ldu && !ldu.isEmpty()) */ {
             LOG.warn("URL olemassa sitä luotaessa");
+            //return Response.status(500, "URL already exist").build(); //putoaa lopun TODOhun
         } else { //URLia ei ollut jo olemassa
             int scheme = ApplicationLifecycle.scheme(id, s.type);
             if (scheme < 0) {
@@ -223,14 +230,20 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
             }
             Syntax alut = syntax(scheme, id, s.type);
             try {
+                Dim_pid_scheme dps = dpss.getById(scheme);
+                String pidSyntaxRegexp = dps.pid_syntax_regexp;
                 Connection connection = defaultDataSource.getConnection();
                 Util util = new Util();
                 Sisältö content = util.realCreate(id, scheme, connection);
                 if (content.getStatus() < 0) {
                     return Response.status(500, content.getError()).build();
                 }
-                StringBuffer sb = content.getSb();
                 Dim_PID pid = content.getPid();
+                StringBuffer sb = content.getSb();
+                if (pidSyntaxRegexp.contains("UUID")) {
+                    String sisältö = content.getTarkistettava() + content.getTarkiste();
+                    sb = new StringBuffer(Util.UUID(sisältö));
+                }
                 if (alut.alaviiva()) {
                     sb.insert(6, ALAVIIVA);
                 }
@@ -239,10 +252,12 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
                 else
                     sb.insert(0, alut.urn());
                 if (alut.alaviiva()) {
-                    sb.append("_");
+                    sb.append(ALAVIIVA);
                 }
-                sb.append(content.getTarkiste());
-                Dim_CSC_info dci = new Dim_CSC_info(sb.toString().substring(11));//urn:nbn:fi:
+                if (!pidSyntaxRegexp.contains("UUID")) { //NOT
+                    sb.append(content.getTarkiste());
+                }
+                Dim_CSC_info dci = new Dim_CSC_info(sb.substring(11));//urn:nbn:fi:
                 dci.setChecksum(content.getTarkiste());
                 dci.persistAndFlush();
                 pid.identifier_string = sb.toString();
@@ -302,7 +317,12 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
         String pidSyntaxRegexp = dps.pid_syntax_regexp;
         boolean alaviiva = dps.pid_syntax_regexp.contains(ALAVIIVA);
         boolean ishandle = type.contains("Handle");
-        int index = pidSyntaxRegexp.indexOf(REGEXPPARSERI); //"YYYYMM" not very clever
+        int index = -11;
+        if (pidSyntaxRegexp.contains(YYYYMM)) {
+            index = pidSyntaxRegexp.indexOf(YYYYMM); //"YYYYMM" not very clever
+        } else {
+            index = pidSyntaxRegexp.indexOf(UUID);
+        }
         if (index < 0) {
             LOG.error("Tietokannassa liian vaikea Regexp, please fix the code");
             return Syntax.virhe(alaviiva, false, ishandle);
@@ -319,7 +339,7 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
             }
             Dim_pid_scheme urndps = dpss.getById(urnscheme);
             String urnpidSyntaxRegexp = urndps.pid_syntax_regexp;
-            int urnindex = urnpidSyntaxRegexp.indexOf(REGEXPPARSERI);
+            int urnindex = urnpidSyntaxRegexp.indexOf(YYYYMM);
             if (urnindex < 0) {
                 LOG.error("Tietokannassa liian vaikea URN Regexp, please fix the code");
                 return Syntax.virhe(alaviiva, false, ishandle);

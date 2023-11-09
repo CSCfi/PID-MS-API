@@ -52,12 +52,12 @@ public class GetTest {
     static {
         Properties prop = new Properties();
         try {
-         File f = new File(PROPERTIES);
-         FileInputStream in = new FileInputStream(f);
-         prop.load(in);
-         apikey = prop.getProperty("apikey").trim();
-         } catch (IOException ex) {
-         ex.printStackTrace();
-     }
+            File f = new File(PROPERTIES);
+            FileInputStream in = new FileInputStream(f);
+            prop.load(in);
+            apikey = prop.getProperty("apikey").trim();
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
     }
 }

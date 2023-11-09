@@ -12,10 +12,10 @@ public class Dim_URLService {
     }
 
     public long countByURL(String URL) {
-        return  Dim_url.find("url = ?1", new String[]{URL}).count();
+        return  Dim_url.find("url = ?1", (Object[])new String[]{URL}).count();
     }
 
     public List<Dim_url> getByURL(String URL) {
-        return  Dim_url.find("url = ?1", new String[]{URL}).list();
+        return  Dim_url.find("url = ?1", (Object[])new String[]{URL}).list();
     }
 }

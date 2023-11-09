@@ -11,6 +11,6 @@ import java.util.List;
 @ApplicationScoped
 public class Fact_touchedService {
     public List<Fact_touched> getById(long id) {
-        return Fact_touched.find("dim_PIDinternal_id = ?1", new Long[]{id}).list();
+        return Fact_touched.find("dim_PIDinternal_id = ?1", (Object[])new Long[]{id}).list();
     }
 }

@@ -1,8 +1,11 @@
 package fi.csc.pid.api.entity;
 
+import io.quarkus.runtime.annotations.RegisterForReflection;
+
 /**
  * Tämä olio on GetPid-metodin paluuarvo (joka tietenkin esitetään JSONina)
  */
+@RegisterForReflection
 public class GetPidTuloste {
     public String pid;
     public String pid_type;

@@ -6,12 +6,14 @@ import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 import org.json.JSONObject;
 
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.text.DecimalFormat;
 import java.text.FieldPosition;
 import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.UUID;
 
 public class Util {
     public final static int INVALID = -1;
@@ -56,6 +58,15 @@ public class Util {
         }
         return url;
     }
+
+    public static String UUID(String sisältö) {
+        byte[] nameSpaceBytes = "Fairdata".getBytes(StandardCharsets.UTF_8);
+        byte[] nameBytes = sisältö.getBytes(StandardCharsets.UTF_8);
+        byte[] result = Util.joinBytes(nameSpaceBytes, nameBytes);
+        UUID uuid = UUID.nameUUIDFromBytes(result);
+        return uuid.toString();
+    }
+
     /**
      * Luo pysyvän tunnisteen tietokantaan
      *

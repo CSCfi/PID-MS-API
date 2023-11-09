@@ -31,6 +31,15 @@ public class Dim_url extends PanacheEntityBase {
         //tarkoituksella tyhjä: "a default constructor is required by the JSON serialization layer"
     }
 
+    /**
+     * Hibernate toimii satunnaisesti, tämä korvaa sen!
+     * @param url String URL
+     */
+    public  Dim_url(String url) {
+        this.url = url;
+        //this.id = talleta(connection);
+    }
+
     public int getId() {
         return id;
     }
@@ -56,7 +65,7 @@ public class Dim_url extends PanacheEntityBase {
                 return -1;
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            LOG.error(e.getMessage());
             return -2;
         }
     }

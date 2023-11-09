@@ -1,6 +1,6 @@
 package fi.csc.pid.api.doi;
 
-import fi.csc.pid.api.PIDResource;
+import fi.csc.pid.api.model.DoiJson;
 import org.json.JSONObject;
 
 import java.io.IOException;
@@ -9,6 +9,7 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.Set;
 
 public class DOI {
     static final String CONTENTTYPE = "Content-Type";
@@ -66,15 +67,15 @@ public class DOI {
     }
 
     /**
-     * Koska schemassa on pakollisia kenttiä (publisher, publication year...) täytyy DOI metatiedot
-     * hakea ennen kuin URLia voi päivittäää.
+     * Vaihdettu logiika niin päin että käyttäjältä tulee valmis doijson. joka
+     * lähetetään suoraan datacitelle ilman tarkistuksia!
      *
      * @param doi String päivitettävä DOI
-     * @param url String uusi URL
+     * @param source DoiJson datacite metadata
      * @return boolean true case success and false case failure.
      *  Note that called.error is to set possible error message from datacite
      */
-    public boolean update(String doi, String url) {
+    public boolean update(String doi, DoiJson source) {
         URI uri = uriFromString(address+"/"+doi); //täydellisessä maailmassa kauttaviivaa ei olisi
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(uri)
@@ -90,17 +91,20 @@ public class DOI {
             }
             JSONObject doijson =  new JSONObject(response.body());
             JSONObject data = (JSONObject) doijson.get("data");
-            JSONObject attributes = (JSONObject) data.get("attributes");
-            attributes.put("url", url);
-            data.put("attributes", attributes); //tässä saattaa olla pari turhaa riviä
-            doijson.put("data", data); //varmuuden vuoksi, tämän testaaminen epäoleellista
-            request = HttpRequest.newBuilder() //uusiokäytetään muuttuja eikä luoda uutta: vähemmän siivottavaa!
+            JSONObject targetAttributes = (JSONObject) data.get("attributes");
+            JSONObject sourceAttributes =  source.attributes;
+            Set<String> keys = sourceAttributes.keySet();
+            keys.forEach(key -> targetAttributes.put(key, sourceAttributes.get(key)));
+            data.put("attributes", targetAttributes); //tässä saattaa olla pari turhaa riviä
+            doijson.put("data", data); //varmuuden vuoksi, tämän testaaminen epäoleellista*/
+            request = HttpRequest.newBuilder()
                 .uri(uri)
                 .header(CONTENTTYPE, JSON)
                 .header("Authorization", "Basic "+datacite_salasana)
                 .PUT(HttpRequest.BodyPublishers.ofString(doijson.toString())).build();
             response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            if (400 == response.statusCode() || 404  == response.statusCode()) {
+            called.errorcode = response.statusCode();
+            if (399 < called.errorcode  ) {
                 called.error = response.body();
                 return false;
             }

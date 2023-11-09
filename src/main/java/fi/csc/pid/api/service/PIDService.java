@@ -12,6 +12,6 @@ public class PIDService {
    }
 
    public Dim_PID getByPID(String pid) {
-       return Dim_PID.find("identifier_string = ?1", new String[]{pid}).firstResult();
+       return Dim_PID.find("identifier_string = ?1", (Object[])new String[]{pid}).firstResult();
    }
 }

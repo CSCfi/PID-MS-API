@@ -1,7 +1,6 @@
 package fi.csc.pid.api.doi;
 
 import fi.csc.pid.api.ApplicationLifecycle;
-import fi.csc.pid.api.PIDResource;
 import fi.csc.pid.api.Util;
 import fi.csc.pid.api.db.FactPiDInterlinkage;
 import fi.csc.pid.api.entity.Dim_CSC_info;
@@ -9,6 +8,7 @@ import fi.csc.pid.api.entity.Dim_PID;
 import fi.csc.pid.api.entity.Dim_pid_scheme;
 import fi.csc.pid.api.entity.Dim_url;
 import fi.csc.pid.api.entity.Fact_pid_interlinkage;
+import fi.csc.pid.api.model.DoiJson;
 import fi.csc.pid.api.model.Sisältö;
 import fi.csc.pid.api.service.Dim_URLService;
 import fi.csc.pid.api.service.Dim_pid_schemeService;
@@ -27,16 +27,14 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.json.JSONObject;
 
-import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
-import java.util.UUID;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import static fi.csc.pid.api.PIDResource.NOCONNECTION;
 import static fi.csc.pid.api.Util.ACCESSDENIED;
 import static fi.csc.pid.api.Util.INVALID;
-import static fi.csc.pid.api.Util.URLMISSING;
 import org.jboss.logging.Logger;
 
 @Path("/v1/pid/doi")
@@ -58,6 +56,7 @@ public class DOIResource {
         String datacite_salasana;
         private static final Logger LOG = Logger.getLogger(DOIResource.class);
     public String error; //from datacite
+    public int errorcode; //from datacite
     /** @ Transactional
      * Register new DOI to datasite
      *
@@ -76,16 +75,26 @@ public class DOIResource {
         int id = Util.tarkistaAPIavain(apikey);
         if (INVALID == id) return ACCESSDENIED; //full stop
 
-        JSONObject doi =  new JSONObject(doijson);
-        JSONObject data = (JSONObject) doi.get("data");
-        JSONObject attributes = (JSONObject) data.get("attributes");
-        String url =  (String) attributes.get("url");
-        if (null == url) {
-            LOG.error("DOIlta puuttuu URL!");
-            return URLMISSING;
+        DoiJson dj = new DoiJson(doijson);
+        if (dj.error) {
+            LOG.error("DoiJson parsing error");
+            return dj.errorResponse;
+        } else {
+            LOG.info("DoiJson parsing ok: "+dj.getUrl());
         }
-        //Tässä ei tarkisteta URLin olemassaoloa
-        // Eli myönnetään DOI vaikka samalla URLilla olisi jo URN tai handle
+        //Tarkistetaan ettei URLille ole jo DOI
+        long duc = dus.countByURL(dj.getUrl());
+        if (0 < duc) { //URLilla on jo joku PID
+            List<Dim_url> urllist = dus.getByURL(dj.getUrl());
+            List<String> aldoi = urllist.stream().map(this::tarkistaDOI).toList();
+            LOG.info("aldoi size: "+aldoi.size());
+            String doiorempty = aldoi.stream().filter(d -> !d.isEmpty()).collect(Collectors.joining(", "));
+            LOG.info("doiorempty: "+doiorempty);
+            if (!doiorempty.isEmpty()) {
+                return Response.status(400, "URL already have DOI(s): " + doiorempty).build();
+            }
+        }
+
         int scheme = ApplicationLifecycle.scheme(id, "DOI");
         if (scheme < 0) {
             LOG.warn("DOI scheme missing: " + id);
@@ -103,19 +112,15 @@ public class DOIResource {
             Sisältö content = util.realCreate(id, scheme, connection);
             String sisältö = content.getTarkistettava() + content.getTarkiste();
             if (pidSyntaxRegexp.contains("UUID")) {
-                byte[] nameSpaceBytes = "Fairdata".getBytes(StandardCharsets.UTF_8);
-                byte[] nameBytes = sisältö.getBytes(StandardCharsets.UTF_8);
-                byte[] result = Util.joinBytes(nameSpaceBytes, nameBytes);
-                UUID uuid = UUID.nameUUIDFromBytes(result);
-                sisältö = uuid.toString();
+                sisältö = Util.UUID(sisältö);
             }
             DOI d = new DOI(this, datacite_host, datacite_salasana); //pihvi alkaa
             String dois = alku + sisältö;
-            if (d.create(dois, doi, data, attributes)) {
+            if (d.create(dois, dj.doi, dj.data, dj.attributes)) {
                 content.getPid().identifier_string=dois;
                 content.getPid().update(connection);
-                Dim_url durl = new Dim_url();
-                durl.url = url;
+                LOG.info("URL="+dj.getUrl());
+                Dim_url durl = new Dim_url(dj.getUrl());
                 durl.persistAndFlush();
                 Dim_CSC_info dci = new Dim_CSC_info(sisältö);
                 dci.setChecksum(content.getTarkiste());
@@ -123,9 +128,8 @@ public class DOIResource {
                 FactPiDInterlinkage fpi = new FactPiDInterlinkage(content.getId(), durl.getId(), dci.getPIDMiSe_suffix());
                 fpi.tallenna(connection);
                 return Response.ok(dois).build();
-            }
-            else
-                return Response.status(400, "Datacite failed: "+this.error).build();
+            } else
+                return Response.status(this.errorcode, "Datacite failed: "+this.error).build();
         } catch (java.sql.SQLException e) {
             LOG.error(e.getMessage());
             LOG.error(NOCONNECTION); //??
@@ -139,7 +143,7 @@ public class DOIResource {
      * @param apikey String the secret
      * @param prefix String 10.2...
      * @param suffix String fd-UUID
-     * @param URL String new URL
+     * @param doijson String new metadata
      * @return HTTP Response new URL case ok or error.
      */
     @Transactional
@@ -148,7 +152,7 @@ public class DOIResource {
     @Produces(MediaType.TEXT_PLAIN)
     @Path("{prefix}/{suffix}") //bacause DOI, prefix is allways 10
     public Response update(@HeaderParam("apikey") String apikey, @PathParam("prefix") String prefix,
-                           @PathParam("suffix") String suffix, String URL) {
+                           @PathParam("suffix") String suffix, String doijson) {
         int id = Util.tarkistaAPIavain(apikey);
         if (INVALID == id) return ACCESSDENIED; //full stop
 
@@ -157,28 +161,58 @@ public class DOIResource {
         if (!prefix.startsWith("10")) //10.82614/...
             return Response.status(400, "This is DOI API: the prefix must start with 10").build();
         final String DOI = prefix+"/"+suffix;
-        if (null == URL) {
-            LOG.warn("URL puuttuu!");
-            return URLMISSING;
+        DoiJson dj = new DoiJson(doijson);
+        if (dj.error) {
+            LOG.error("doijson parsing error");
+            return dj.errorResponse;
         }
-        JSONObject jo = new JSONObject(URL);
-        String url = jo.getString("URL");
-        if (null == url) {
-            LOG.warn("Syötteen pitäisi olla JSON olio {URL: arvo}!");
-            return URLMISSING;
-        } // Syöte tarkistettu
+         // Syöte tarkistettu
         Dim_PID pid = ps.getByPID(DOI);
         if (null == pid) {
             return Response.status(400, "Can't find DOI from database").build();
         }
         Fact_pid_interlinkage fpil = fpis.getById(pid.internal_id);
+        Dim_url du = dus.getById(fpil.url_id);
+        Boolean noturlupdate = du.url.equals(dj.getUrl());
         DOI d = new DOI(this, datacite_host, datacite_salasana);
-        if (d.update(DOI, url)) {
-            Dim_url du = dus.getById(fpil.url_id);
-            du.url = url;
-            du.persistAndFlush();
-            return Response.ok(url).build();
-        } else
-            return Response.status(400, "Datacite update  failed: "+this.error).build();
+        if (d.update(DOI, dj)) {
+            if (!noturlupdate) { //not not = urlupdate
+                du.url = dj.getUrl();
+                du.persistAndFlush();
+            }
+            return Response.ok(dj.getUrl()).build();
+        } else {
+            LOG.error("Datacite error");
+            return Response.status(400, "Datacite update  failed: " + this.error).build();
+        }
+    }
+
+
+
+    /**
+     * Palauttaa merkkijonon joka sisältää olemassa olevan DOIn samalle parametrina tulevalle Dim_url:llille
+     *
+     * @param durl Dim_url tietokantatauluolio
+     * @return String DOI or empty String
+     */
+    String tarkistaDOI(Dim_url durl) {
+            List<Fact_pid_interlinkage> lfpi = fpis.getByUrlId(durl.getId());
+            StringBuilder sb = new StringBuilder();
+            lfpi.stream().map(this::tarkistaDOI2).forEach(sb::append);
+            return sb.toString();
+    }
+
+    /**
+     * Palauttaa merkkijonon joka sisältää olemassa olevan DOIn Fact_pid_interlinkage tauluoliolle
+     *
+     * @param fpi Fact_pid_interlinkage tauluolio
+     * @return String DOI or empty String
+     */
+    String tarkistaDOI2(Fact_pid_interlinkage fpi) {
+        Dim_PID pid = ps.getById(fpi.dim_PIDinternal_id);
+        if (pid.identifier_string.startsWith("10"))
+            return pid.identifier_string;
+        else
+            return "";
     }
 }
