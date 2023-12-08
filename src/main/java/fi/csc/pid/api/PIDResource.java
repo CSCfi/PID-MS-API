@@ -69,6 +69,14 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
     public final static String NOCONNECTION = "Can't get connection from database";
     private final static String HANDLEFAULURE = "Handlen luonti epäonnistui";
 
+    /**
+     * URN kopioi= tallentaa URN-URL parin kantaan.
+     *
+     * @param spid String URN
+     * @param apikey String secret key
+     * @param URL String URL
+     * @return String URN (same as spid input)
+     */
     @Transactional
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
@@ -78,63 +86,58 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
         int id = Util.tarkistaAPIavain(apikey);
         if (INVALID == id) return ACCESSDENIED;
         else {
-            String url;
-            if (null == URL) {
+            String url = tarkistaURL(URL);
+            if (url.equals(URLPUUTTUU)) {
                 LOG.warn("URL puuttuu!");
                 return URLMISSING;
-            } else {
-                JSONObject jo = new JSONObject(URL);
-                url = jo.getString("URL");
-                if (null == url) {
-                    LOG.warn("Syötteen pitäisi olla JSON olio {URL: arvo}!");
-                    return URLMISSING;
-                }
             }
             long duc = dus.countByURL(url);
             if (0 < duc)/*null != ldu && !ldu.isEmpty()) */ {
                 LOG.warn("URL olemassa sitä luotaessa: " + url);
             } else { //URLia ei ollut jo olemassa
                 int scheme = ApplicationLifecycle.scheme(id, "URN");
-                if (scheme < 0) {
-                    LOG.warn("URN scheme missing: " + id);
-                    return Response.status(500, "scheme missing:" + scheme).build();
-                }
-                Dim_PID pid = new Dim_PID();
-                pid.dim_serviceid = id;
-                pid.dim_pid_scheme_id = scheme;
-                if (null == pid.created) {
-                    pid.created = LocalDateTime.now();
-                }
-                try {
-                    Connection connection = defaultDataSource.getConnection();
-                    long internal_id = pid.tallenna(connection);
-                    if (internal_id < 0) {
-                        return Response.status(500, "Virhe sarjanumeron luonnissa").build();
-                    }
-                    Dim_CSC_info dci = new Dim_CSC_info(spid);//urn:nbn:fi:
-                    dci.persistAndFlush();
-                    pid.identifier_string = spid;
-
-                    Dim_url durl = new Dim_url();
-                    durl.url = url;
-                    durl.persistAndFlush();
-
-                    historiantallennus(id, internal_id, url);
-
-                    LOG.info("URL " + durl.getId() + " ja PID tallenetaan kantaan");
-                    pid.update(connection);
-                    FactPiDInterlinkage fpi = new FactPiDInterlinkage(internal_id, durl.getId(), dci.getPIDMiSe_suffix());
-                    fpi.tallenna(connection);
-                    return Response.ok(pid.identifier_string).build();
-                } catch (java.sql.SQLException e) {
-                    LOG.error(NOCONNECTION);
-                    return Response.status(501, NOCONNECTION).build();
-                }
+                return kopioi(spid, url, scheme,id);
             }
             // ylempänä on jo log.warn, jos tänne päädytään
             return Response.status(501, "Päädyttiin aivan väärään paikkaan, URL olemassa?").build();
         }
     }
+
+    /**
+     * DOI kopioi= tallentaa DOI-URL parin kantaan.
+     *
+     * @param prefix String DOI prefix 10.2
+     * @param suffix String DOI suffix
+     * @param apikey String secret
+     * @param URL String {'URL': 'https.//...'}
+     * @return String DOI = prefix + suffix
+     */
+    @Transactional
+    @POST
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.TEXT_PLAIN)
+    @Path("{prefix}/{suffix}") //bacause DOI, prefix is allways starts with 10
+    public Response kopioi(@PathParam("prefix") String prefix,
+                           @PathParam("suffix") String suffix,
+                           @HeaderParam("apikey") String apikey,
+                           String URL) {
+        int id = Util.tarkistaAPIavain(apikey);
+        if (INVALID == id) return ACCESSDENIED;
+        if ((null == prefix) || (null == suffix))
+            return Response.status(400, "The pathparam must be 10/suffix").build();
+        if (!prefix.startsWith("10")) //10.82614/...
+            return Response.status(400, "This is DOI API: the prefix must start with 10").build();
+        final String DOI = prefix+"/"+suffix;
+        final String url = tarkistaURL(URL);
+        if (url.equals(URLPUUTTUU))
+            return URLMISSING;
+        long duc = dus.countByURL(url);
+        if (0 < duc)
+            return Response.status(400, "URL already exists!").build();
+        int scheme = ApplicationLifecycle.scheme(id, "DOI");
+        return kopioi(DOI, url, scheme,id);
+    }
+
     /**
      * ListHistory
      *
@@ -365,4 +368,41 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
         ft.persistAndFlush();
     }
 
+    Response kopioi(String spid, String url, int scheme, int id) {
+        if (scheme < 0) {
+            LOG.warn("URN scheme missing: " + id);
+            return Response.status(500, "scheme missing:" + scheme).build();
+        }
+        Dim_PID pid = new Dim_PID();
+        pid.dim_serviceid = id;
+        pid.dim_pid_scheme_id = scheme;
+        if (null == pid.created) {
+            pid.created = LocalDateTime.now();
+        }
+        try {
+            Connection connection = defaultDataSource.getConnection();
+            long internal_id = pid.tallenna(connection);
+            if (internal_id < 0) {
+                return Response.status(500, "Virhe sarjanumeron luonnissa").build();
+            }
+            Dim_CSC_info dci = new Dim_CSC_info(spid);//urn:nbn:fi:
+            dci.persistAndFlush();
+            pid.identifier_string = spid;
+
+            Dim_url durl = new Dim_url();
+            durl.url = url;
+            durl.persistAndFlush();
+
+            historiantallennus(id, internal_id, url);
+
+            LOG.info("URL " + durl.getId() + " ja PID tallenetaan kantaan");
+            pid.update(connection);
+            FactPiDInterlinkage fpi = new FactPiDInterlinkage(internal_id, durl.getId(), dci.getPIDMiSe_suffix());
+            fpi.tallenna(connection);
+            return Response.ok(pid.identifier_string).build();
+        } catch (java.sql.SQLException e) {
+            LOG.error(NOCONNECTION);
+            return Response.status(501, NOCONNECTION).build();
+        }
+    }
 }
