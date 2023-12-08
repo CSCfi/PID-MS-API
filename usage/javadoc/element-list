@@ -1,0 +1,9 @@
+fi.csc.pid.api
+fi.csc.pid.api.db
+fi.csc.pid.api.doi
+fi.csc.pid.api.entity
+fi.csc.pid.api.hallinta
+fi.csc.pid.api.handle
+fi.csc.pid.api.model
+fi.csc.pid.api.model.doi
+fi.csc.pid.api.service
