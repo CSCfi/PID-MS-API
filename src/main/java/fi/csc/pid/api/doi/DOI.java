@@ -52,7 +52,8 @@ public class DOI {
         try {
             response = client.send(request, HttpResponse.BodyHandlers.ofString());
             System.out.println(response.statusCode() + response.body());
-            if (400 == response.statusCode() || 404  == response.statusCode()) {
+            if ( response.statusCode() >= 400 ) { // Atron idea
+                called.errorcode = response.statusCode() ;
                 called.error = response.body();
                 return false;
             }

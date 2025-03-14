@@ -8,13 +8,13 @@ import java.net.http.HttpResponse;
 import java.util.Base64;
 
 import static fi.csc.pid.api.doi.DOI.uriFromString;
-import static fi.csc.pid.api.handle.TLS.getSSLContext;
+
 import static fi.csc.pid.api.handle.TLS.getSslParam;
 
 public class Handle {
 
-    public static final String EPIC_SERVICE_PREFIX = "11113/lb-"; // Toistaiseksi vain tällä prefixilla!
-    //uuden asiakkaan on neuvoteltava lb- tilalle oma avauus eudatin kanssa tai kokonaan uusi prefix
+    public static final String SURF_SERVICE_PREFIX = "11113/lb-";
+    public static final String GWDG_SERVICE_PREFIX = "21.T13999/EOSC-";
     public static final String EPIC_PROTOCOL = "https://";
 
     //Jag förstår inte, men fungerar
@@ -24,43 +24,59 @@ public class Handle {
                 "type":"URL",
                 "data":{"format":"string","value":""";
 
-    static final String JSON2 = """
+    public static final String JSONSURF = """
                     }},
                {"index":100,
                 "type":"HS_ADMIN",
                 "data":{"format":"admin","value":{"handle":"0.NA/11113","index":200,"permissions":"011111110011"}}}
                ]}
             """;
+    public static final String JSONGWDG = """
+                 }},
+               {"index":100,
+                "type":"HS_ADMIN",
+                "data":
+        {
+         "format":"admin",
+         "value":{"handle":"0.NA/21.T13999","index":300,"permissions":"110011111110"}
+        }
+    }
+    ]}
+    """;
 
     static final String HIPSU = "\"";
 
     // Konfiguraatio tiedostosta resources/application.properties
-    String host; //epic-pid.storage.surfsara.nl
-    String port; //8004
+    String host;
+    String port;
     String api; //  /api/handles/
-    String user; //USER01_311_11113
+    String user;
     private final byte[]  privateData;
+    TLS tls;
 
-    public Handle(String host, String port,String api, String epickey ) {
+    public Handle(String host, String port,String api, String user, String key, String kspass ) {
         this.host = host;
         this.port = port;
         this.api = api;
-        String privateKeyPEM = epickey
+        this.user = user;
+        String privateKeyPEM = key
                 .replace("-----BEGIN PRIVATE KEY-----", "")
                 .replace("-----END PRIVATE KEY-----", "")
                 .replaceAll(System.lineSeparator(), "");
         //System.out.println("Debug avain:"+privateKeyPEM);
         privateData = Base64.getDecoder().decode(privateKeyPEM);
+        this.tls = new TLS(kspass);
     }
 
 
-    public static String json(String url) {
-        return JSON1 + HIPSU + url + HIPSU + JSON2;
+    public static String json(String url, String loppu) {
+
+        return JSON1 + HIPSU + url + HIPSU + loppu;
     }
 
-    public boolean create(String url, String suffix) {
-        String json = json(url);
-        URI uri = uriFromString(EPIC_PROTOCOL+host+":"+port+api+EPIC_SERVICE_PREFIX + suffix);
+    public boolean create(String url, String prefix, String suffix, String loppu) {
+        String json = json(url, loppu);
+        URI uri = uriFromString(EPIC_PROTOCOL+host+":"+port+api + prefix + suffix);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(uri)
@@ -69,20 +85,21 @@ public class Handle {
                 .header("Content-Lengt", String.valueOf(json.length()))
                 .PUT(HttpRequest.BodyPublishers.ofString(json))
                 .build();
-        HttpClient client = HttpClient.newBuilder()
-                .sslContext(getSSLContext(host, user, privateData))
+        try (HttpClient client = HttpClient.newBuilder()
+                .sslContext(tls.getSSLContext(host, user, privateData))
                 .sslParameters(getSslParam())
-                .build();
-        HttpResponse<String> response;
-        try {
-            response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            System.out.println(response.statusCode() + response.body());
-            return true;
-        } catch (IOException e) {
-            System.err.println(e.getMessage());
-            throw new RuntimeException(e);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+                .build()) {
+            HttpResponse<String> response;
+            try {
+                response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                System.out.println(response.statusCode() + response.body());
+                return true;
+            } catch (IOException e) {
+                System.err.println(e.getMessage());
+                throw new RuntimeException(e);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
         }
         //return false;
     }

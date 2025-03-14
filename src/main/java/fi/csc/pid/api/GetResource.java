@@ -24,10 +24,12 @@ import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 
 import static fi.csc.pid.api.Util.URLMISSING;
+import static fi.csc.pid.api.doi.DOIResource.MUSTBEDOI;
+
 import fi.csc.pid.api.service.Dim_URLService;
 import fi.csc.pid.api.entity.Dim_url;
 
-import java.io.UnsupportedEncodingException;
+//import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -46,7 +48,7 @@ public class GetResource {
     Dim_pid_schemeService dpss;
 
     /**
-     * https://wiki.eduuni.fi/display/CSCdatamanagementoffice/PID-service+REST+API+description
+     * <a href="https://wiki.eduuni.fi/display/CSCdatamanagementoffice/PID-service+REST+API+description">https://wiki.eduuni.fi/display/CSCdatamanagementoffice/PID-service+REST+API+description</a>
      * Tämä siis palauttaa mahdollisen olemassa olevan PIDin.
      *
      * @param apikey  String palvelulle spesifinen PID palvelun käyttötunniste
@@ -70,11 +72,11 @@ public class GetResource {
         if (null == ldu || ldu.isEmpty()) {
             return Response.status(500, "Unknown URL").build();
         }
-        List<Fact_pid_interlinkage> lfpi = fpis.getByUrlId(ldu.get(0).getId());
+        List<Fact_pid_interlinkage> lfpi = fpis.getByUrlId(ldu.getFirst().getId());
         if (lfpi.isEmpty()) { //should not happen
            return Response.status(500, "URL has no PID").build();
         }
-        Fact_pid_interlinkage fpi = lfpi.get(0);
+        Fact_pid_interlinkage fpi = lfpi.getFirst();
         Dim_PID dp = ps.getById(fpi.dim_PIDinternal_id);
         if (null == dp) { // very bad error in database
             return Response.status(500, "URL exist but no PID!").build();
@@ -86,7 +88,7 @@ public class GetResource {
     }
 
     /**
-     *  https://wiki.eduuni.fi/display/CSCdatamanagementoffice/PID-service+REST+API+description
+     *  <a href="https://wiki.eduuni.fi/display/CSCdatamanagementoffice/PID-service+REST+API+description">https://wiki.eduuni.fi/display/CSCdatamanagementoffice/PID-service+REST+API+descriptio</a>
      *
      * @param apikey String palvelulle spesifinen PID palvelun käyttötunniste
      * @param PID String tunniste
@@ -102,19 +104,56 @@ public class GetResource {
         if (null == PID) {
             return Response.status(500, "PID is missing").build();
         }
-        Dim_PID dp = ps.getByPID(PID);
-        if (null == dp) {
-             return Response.status(500, "Unknown PID").build();
-        }
-        Fact_pid_interlinkage fpi = fpis.getById(dp.internal_id);
-        if (null == fpi) { // very bad error in database
-            return Response.status(500, "Pid exist but no URL").build();
-        }
-        Dim_url du = dus.getById(fpi.url_id);
-        if (null == du) { // very bad error in database
-            return Response.status(500, "URL is missing").build();
-        }
-        return Response.ok(du.url).build();
+        return resolvoi(PID);
     }
 
+    /**
+     * Local DOI resolver
+     * Please use doi.org instesd of this
+     * This is done because of the CSCPID-37
+     *
+     * @param apikey String palvelulle spesifinen PID palvelun käyttötunniste
+     * @param prefix  String PID prefix
+     * @param suffix  String   PID suffix
+     * @return String resurssin url
+     */
+     @JacksonFeatures(serializationDisable = {SerializationFeature.FAIL_ON_EMPTY_BEANS})
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    @Path("{prefix}/{suffix}" )
+    public Response getURL(@HeaderParam("apikey") String apikey,@PathParam("prefix") String prefix,
+                           @PathParam("suffix") String suffix) {
+         int sid = Util.tarkistaAPIavain(apikey);
+        if (Util.INVALID == sid) return Util.ACCESSDENIED;
+        if ((null == prefix) || (null == suffix))
+            return Response.status(400, MUSTBEDOI).build();
+        final String DOI = prefix+"/"+suffix;
+        return resolvoi(DOI);
+     }
+
+    /**
+     * Resolvoi lokaalisti URNin tai DOIn (mahdollisesti muunkin PIDin).
+     * Oikeasti ainakin DOIt pitäisi reslvoida doi.org:issa.
+     *
+     * @param pid String URN or DOI, handle may work too
+     * @return Response String URL
+     */
+     Response resolvoi(String pid) {
+         LOG.debug("vasta resolvoinnin alussa: "+pid);
+         Dim_PID dp = ps.getByPID(pid);
+         if (null == dp) {
+             return Response.status(404, "Unknown PID").build();
+         }
+         LOG.debug("PID löytyi");
+         Fact_pid_interlinkage fpi = fpis.getById(dp.internal_id);
+         if (null == fpi) { // very bad error in database
+             return Response.status(500, "Pid exist but no URL").build();
+         }
+         LOG.debug("melkein resolvoitu");
+         Dim_url du = dus.getById(fpi.url_id);
+         if (null == du) { // very bad error in database
+             return Response.status(500, "URL is missing").build();
+         }
+         return Response.ok(du.url).build();
+     }
 }

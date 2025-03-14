@@ -32,31 +32,43 @@ import static fi.csc.pid.api.Util.URLMISSING;
 import static fi.csc.pid.api.Util.URLPUUTTUU;
 import static fi.csc.pid.api.Util.tarkistaURL;
 import static fi.csc.pid.api.doi.DOI.uriFromString;
-import static fi.csc.pid.api.handle.Handle.EPIC_PROTOCOL;
-import static fi.csc.pid.api.handle.TLS.getSSLContext;
+
+import fi.csc.pid.api.handle.Handle;
+
+import static fi.csc.pid.api.handle.Handle.*;
 import static fi.csc.pid.api.handle.TLS.getSslParam;
 
 
 @Path("/v1/pid/handle/")
 public class HandleResource {
 
-    @ConfigProperty(name = "epic.host")
-    String epic_host;
-    @ConfigProperty(name = "epic.port")
-    String epic_port;
+    @ConfigProperty(name = "surf.host")
+    String surf_host;
+    @ConfigProperty(name = "gwdg.host")
+    String  gwdg_host;
+    @ConfigProperty(name = "surf.port")
+    String surf_port;
+    @ConfigProperty(name = "gwdg.port")
+    String gwdg_port;
     @ConfigProperty(name = "epic.api")
     String epic_api;
-    @ConfigProperty(name = "epic.key")
-    String EPICKEY;
-    @ConfigProperty(name = "epic.user")
-    String EPICUSER;
+    @ConfigProperty(name = "surf.key")
+    String SURFKEY;
+    @ConfigProperty(name = "surf.user")
+    String surf_user;
+    @ConfigProperty(name = "gwdg.key")
+    String GWDGKEY;
+    @ConfigProperty(name = "gwdg.user")
+    String gwdg_user;
+    @ConfigProperty(name = "KEYSTORESS")
+    String KEYSTORESS;
     @Inject
     Fact_pid_interlinkageService fpis;
     @Inject
     Dim_URLService dus;
 
     private static final Logger LOG = Logger.getLogger(DOIResource.class);
-
+    public static final int EOSC = 5;
 
 
     @Transactional
@@ -77,8 +89,14 @@ public class HandleResource {
             return URLMISSING;
         }
         // Syöte tarkistettu (Handlen API vastaa prefix/suffixtarkistuksista!)
-        String json = Handle.json(url);
-        URI uri = uriFromString(EPIC_PROTOCOL+epic_host+":"+epic_port+epic_api+handle);
+        Util util = new Util();
+        String loppu = util.surforGWDG(sid, JSONSURF,  JSONGWDG);
+        String json = Handle.json(url, loppu);
+        String host = util.surforGWDG(sid, surf_host, gwdg_host );
+        String port = util.surforGWDG(sid, surf_port, gwdg_port );
+        String key = util.surforGWDG(sid, SURFKEY, GWDGKEY );
+        String user =  util.surforGWDG(sid, surf_user, gwdg_user );
+        URI uri = uriFromString(EPIC_PROTOCOL+host+":"+port+epic_api+handle);
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(uri)
                 .header("Content-Type", "application/json")
@@ -86,13 +104,14 @@ public class HandleResource {
                 .header("Content-Lengt", String.valueOf(json.length()))
                 .PUT(HttpRequest.BodyPublishers.ofString(json))
                 .build();
-        String privateKeyPEM = EPICKEY
+        String privateKeyPEM = key
                 .replace("-----BEGIN PRIVATE KEY-----", "")
                 .replace("-----END PRIVATE KEY-----", "")
                 .replaceAll(System.lineSeparator(), "");
         byte[]  privateData= Base64.getDecoder().decode(privateKeyPEM);
+        TLS tls = new TLS(KEYSTORESS);
         HttpClient client = HttpClient.newBuilder()
-                .sslContext(getSSLContext(epic_host, EPICUSER, privateData))
+                .sslContext(tls.getSSLContext(host, user, privateData))
                 .sslParameters(getSslParam())
                 .build();
         HttpResponse<String> response;

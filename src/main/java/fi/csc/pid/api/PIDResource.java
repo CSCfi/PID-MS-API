@@ -10,7 +10,6 @@ import io.agroal.api.AgroalDataSource;
 import org.jboss.resteasy.annotations.jaxrs.PathParam;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.inject.Inject;
-import org.json.JSONObject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Response;
@@ -30,6 +29,7 @@ import static fi.csc.pid.api.Util.TODO;
 import static fi.csc.pid.api.Util.URLMISSING;
 import static fi.csc.pid.api.Util.URLPUUTTUU;
 import static fi.csc.pid.api.Util.tarkistaURL;
+import static fi.csc.pid.api.handle.Handle.*;
 
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -53,15 +53,26 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
     Fact_touchedService fts;
     @Inject
     AgroalDataSource defaultDataSource;
-    @ConfigProperty(name = "epic.host")
-    String epic_host;
-    @ConfigProperty(name = "epic.port")
-    String epic_port;
+    @ConfigProperty(name = "surf.port")
+    String surf_port;
+    @ConfigProperty(name = "gwdg.port")
+    String gwdg_port;
     @ConfigProperty(name = "epic.api")
     String epic_api;
-    @ConfigProperty(name = "epic.key")
-    String EPICKEY;
-
+     @ConfigProperty(name = "surf.host")
+    String surf_host;
+    @ConfigProperty(name = "gwdg.host")
+    String  gwdg_host;
+    @ConfigProperty(name = "gwdg.key")
+    String GWDGKEY;
+    @ConfigProperty(name = "surf.key")
+    String SURFKEY;
+     @ConfigProperty(name = "gwdg.user")
+    String gwdg_user;
+     @ConfigProperty(name = "surf.user")
+    String surf_user;
+    @ConfigProperty(name = "KEYSTORESS")
+    String KEYSTORESS;
     private static final Logger LOG = Logger.getLogger(PIDResource.class);
     private final static String YYYYMM = "YYYYMM";
     private final static String UUID ="UUID";
@@ -205,6 +216,8 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
     }
 
     /**
+     * Create new PID
+     *
      * @param apikey String Palvelun apiavoin
      * @param s      Syöte contains URL, type like URN, persisti
      * @return String "text/plain" new PID (or a error message)
@@ -222,7 +235,7 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
             return URLMISSING;
         }
         long duc = dus.countByURL(s.getUrl());
-        if (0 < duc)/*null != ldu && !ldu.isEmpty()) */ {
+       if (0 < duc) {
             LOG.warn("URL olemassa sitä luotaessa");
             //return Response.status(500, "URL already exist").build(); //putoaa lopun TODOhun
         } else { //URLia ei ollut jo olemassa
@@ -270,8 +283,14 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
                 url.persistAndFlush();
                 Dim_PID dph = null;
                 if (alut.ishandle()) {
-                    Handle h = new Handle(epic_host, epic_port, epic_api, EPICKEY);
-                    if (!h.create(s.getUrl(), content.getTarkistettava() + content.getTarkiste())) {
+                    String host = util.surforGWDG(id, surf_host, gwdg_host );
+                    String port = util.surforGWDG(id, surf_port, gwdg_port );
+                    String key = util.surforGWDG(id, SURFKEY, GWDGKEY );
+                    String user =  util.surforGWDG(id, surf_user, gwdg_user );
+                    String prefix = util.surforGWDG(id, SURF_SERVICE_PREFIX, GWDG_SERVICE_PREFIX);
+                    String loppu = util.surforGWDG(id, JSONSURF,  JSONGWDG);
+                    Handle h = new Handle(host, port, epic_api, user, key, KEYSTORESS);
+                    if (!h.create(s.getUrl(), prefix, content.getTarkistettava() + content.getTarkiste(), loppu)) {
                         LOG.error(HANDLEFAULURE);
                         return Response.status(500, HANDLEFAULURE).build();
                     }
@@ -302,7 +321,7 @@ public class PIDResource /*extends PanacheEntityResource<Dim_PID, Long>*/ {
                 LOG.error(NOCONNECTION);
                 return Response.status(501, NOCONNECTION).build();
             }
-        }
+       }
         return TODO;
 
     }

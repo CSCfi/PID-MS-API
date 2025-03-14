@@ -15,6 +15,8 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
 
+import static fi.csc.pid.api.handle.HandleResource.EOSC;
+
 public class Util {
     public final static int INVALID = -1;
     public final static int AD = 403; //Forbidden
@@ -24,7 +26,7 @@ public class Util {
     public final static String URLPUUTTUU = "URLPUUTTUU";
     public final static Response URLMISSING = Response.status(400, "URL must be JSON olio {\"URL\": \"arvo\"}!").build();
     private static final Logger LOG = Logger.getLogger(Util.class);
-
+    private static final String SISÄLTÖWASNULL = "Sisältö was null";
     private static final DecimalFormat df = new DecimalFormat("00000000");
     private static final DecimalFormat dfm = new DecimalFormat("00"); //kuukausi
     private static final FieldPosition fp = new FieldPosition(NumberFormat.INTEGER_FIELD);
@@ -61,6 +63,10 @@ public class Util {
 
     public static String UUID(String sisältö) {
         byte[] nameSpaceBytes = "Fairdata".getBytes(StandardCharsets.UTF_8);
+        if (null == sisältö) {
+            LOG.error(SISÄLTÖWASNULL);
+            return SISÄLTÖWASNULL;
+        }
         byte[] nameBytes = sisältö.getBytes(StandardCharsets.UTF_8);
         byte[] result = Util.joinBytes(nameSpaceBytes, nameBytes);
         UUID uuid = UUID.nameUUIDFromBytes(result);
@@ -150,4 +156,7 @@ public class Util {
         return result;
     }
 
+    public String surforGWDG(int id, String surf, String gwdg) {
+        return EOSC == id ? gwdg : surf; //5 = EOSC
+    }
 }
